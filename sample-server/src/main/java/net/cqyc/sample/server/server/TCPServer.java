@@ -1,12 +1,16 @@
 package net.cqyc.sample.server.server;
 
 
+import net.cqyc.sample.clink.utils.CloseUtils;
 import net.cqyc.sample.server.server.handle.ClientHandler;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.channels.*;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -19,10 +23,12 @@ import java.util.concurrent.Executors;
 public class TCPServer implements ClientHandler.ClientHandlerCallback{
 
     private final int port;
-    private ClientListener mListener;
+    private ClientListener listener;
 //    private List<ClientHandler> clientHandlerList = Collections.synchronizedList(new ArrayList<>()); 只是对内部方法操作上来说是线程安全的，在添加和操作时，同时遍历list也会存在安全问题
     private List<ClientHandler> clientHandlerList = new ArrayList<>();
     private final ExecutorService forwardingThreadPoolExecutor;
+    private Selector selector;
+    private ServerSocketChannel server;
 
     public TCPServer(int port) {
         this.port = port;
@@ -32,8 +38,18 @@ public class TCPServer implements ClientHandler.ClientHandlerCallback{
 
     public boolean start() {
         try {
-            ClientListener listener = new ClientListener(port);
-            mListener = listener;
+            selector = Selector.open();
+            //启动一个通道
+            this.server = ServerSocketChannel.open();
+            //配置他为非阻塞状态
+            server.configureBlocking(false);
+            //绑定本地端口
+            server.socket().bind(new InetSocketAddress(port));
+            //注册一个事件, 注册一个当有客户端到达的监听事件
+            server.register(selector, SelectionKey.OP_ACCEPT);
+            System.out.println("服务器信息： " + server.getLocalAddress().toString());
+            //启动客户端的监听
+            ClientListener listener = this.listener = new ClientListener();
             listener.start();
         } catch (Exception e) {
             e.printStackTrace();
@@ -43,9 +59,11 @@ public class TCPServer implements ClientHandler.ClientHandlerCallback{
     }
 
     public void stop() {
-        if (mListener != null) {
-            mListener.exit();
+        if (listener != null) {
+            listener.exit();
         }
+        CloseUtils.close(server);
+        CloseUtils.close(selector);
         //保证顺序退出
         synchronized (TCPServer.this) {
             for (ClientHandler clientHandler : clientHandlerList) {
@@ -81,6 +99,7 @@ public class TCPServer implements ClientHandler.ClientHandlerCallback{
                         //跳过自己
                         continue;
                     }
+                    
                     //对其他人就发送这条消息
                     clientHandler.send(msg);
                 }
@@ -89,42 +108,59 @@ public class TCPServer implements ClientHandler.ClientHandlerCallback{
     }
 
     private class ClientListener extends Thread {
-        private ServerSocket server;
         private boolean done = false;
-
-        private ClientListener(int port) throws IOException {
-            server = new ServerSocket(port);
-            System.out.println("服务器信息： " + server.getInetAddress() + " P:" + server.getLocalPort());
-        }
 
         @Override
         public void run() {
             super.run();
 
+            Selector selector = TCPServer.this.selector;
             System.out.println("服务器准备就绪～");
             // 等待客户端连接
             do {
                 // 得到客户端
                 Socket client;
                 try {
-                    client = server.accept();
-                } catch (IOException e) {
-                    continue;
-                }
-                // 客户端构建异步线程
-                ClientHandler clientHandler = null;
-                try {
-                    clientHandler = new ClientHandler(client,TCPServer.this);
-                    // 读取数据并打印
-                    clientHandler.readToPrint();
-                    synchronized (TCPServer.this) {
-                        clientHandlerList.add(clientHandler);
+                    //默认让他永远阻塞
+                    if(selector.select() == 0) {
+                        if(done) {
+                            break;
+                        }
+                        continue;
+                    }
+                    System.out.println("我试试这里能不能走");
+                    //拿当前就绪的事件
+                    Iterator<SelectionKey> iterator = selector.selectedKeys().iterator();
+                    while (iterator.hasNext()) {
+                        if(done) {
+                            break;
+                        }
+                        SelectionKey key = iterator.next();
+                        iterator.remove();
+
+                        //检查当前key的状态是否是我们关注的
+                        //客户端到达状态
+                        if(key.isAcceptable()) {
+                            ServerSocketChannel serverSocketChannel = (ServerSocketChannel) key.channel();
+                            //此时这个accept一定是有数据返回的，当有客户端连接的时候，才通知到这里
+                            //非阻塞状态拿到客户端连接
+                            SocketChannel socketChannel = serverSocketChannel.accept();
+                            try {
+                                ClientHandler clientHandler = new ClientHandler(socketChannel,TCPServer.this);
+                                // 读取数据并打印
+                                clientHandler.readToPrint();
+                                synchronized (TCPServer.this) {
+                                    clientHandlerList.add(clientHandler);
+                                }
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                                System.out.println("客户端连接异常：" + e.getMessage());
+                            }
+                        }
                     }
                 } catch (IOException e) {
                     e.printStackTrace();
-                    System.out.println("客户端连接异常：" + e.getMessage());
                 }
-
             } while (!done);
 
             System.out.println("服务器已关闭！");
@@ -132,11 +168,8 @@ public class TCPServer implements ClientHandler.ClientHandlerCallback{
 
         void exit() {
             done = true;
-            try {
-                server.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            //唤醒当前阻塞
+            selector.wakeup();
         }
     }
 
