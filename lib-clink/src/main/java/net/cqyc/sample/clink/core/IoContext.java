@@ -1,8 +1,5 @@
 package net.cqyc.sample.clink.core;
 
-import com.sun.org.apache.bcel.internal.generic.RET;
-
-import java.io.Closeable;
 import java.io.IOException;
 
 /**
@@ -10,7 +7,7 @@ import java.io.IOException;
  * @Description:
  * @date 2021/12/5
  */
-public class IoContext implements Closeable {
+public class IoContext {
 
     private static IoContext INSTANCE;
 
@@ -20,17 +17,26 @@ public class IoContext implements Closeable {
         this.ioProvider = ioProvider;
     }
 
+    public IoProvider getIoProvider() {
+        return ioProvider;
+    }
+
     public static IoContext get() {
         return INSTANCE;
     }
+
     public static StartedBoot setup() {
         return new StartedBoot();
     }
 
+    public static void close() throws IOException {
+        if(INSTANCE != null) {
+            INSTANCE.callClose();
+        }
+    }
 
 
-    @Override
-    public void close() throws IOException {
+    public void callClose() throws IOException {
         ioProvider.close();
     }
 
@@ -40,8 +46,9 @@ public class IoContext implements Closeable {
         public StartedBoot() {
         }
 
-        public StartedBoot(IoProvider ioProvider) {
+        public StartedBoot ioProvider(IoProvider ioProvider) {
             this.ioProvider = ioProvider;
+            return this;
         }
 
         public IoContext start() {

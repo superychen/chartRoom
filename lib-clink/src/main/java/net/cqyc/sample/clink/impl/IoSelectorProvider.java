@@ -59,7 +59,7 @@ public class IoSelectorProvider implements IoProvider {
                 while (!isClosed.get()) {
                     try {
                         if (readSelector.select() == 0) {
-                            //todo
+                            waitSelection(inRegInput);
                             continue;
                         }
                         Set<SelectionKey> selectionKeys = readSelector.selectedKeys();
@@ -88,6 +88,7 @@ public class IoSelectorProvider implements IoProvider {
                 while (!isClosed.get()) {
                     try {
                         if (writeSelector.select() == 0) {
+                            waitSelection(inRegOutput);
                             continue;
                         }
                         Set<SelectionKey> selectionKeys = writeSelector.selectedKeys();

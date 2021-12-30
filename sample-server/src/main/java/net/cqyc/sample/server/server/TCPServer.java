@@ -6,9 +6,11 @@ import net.cqyc.sample.server.server.handle.ClientHandler;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.net.ServerSocket;
 import java.net.Socket;
-import java.nio.channels.*;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
+import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -88,9 +90,6 @@ public class TCPServer implements ClientHandler.ClientHandlerCallback{
 
     @Override
     public void onNewMessageArrived(final ClientHandler handler, final String msg) {
-        //打印到屏幕上
-        System.out.println("Received-" + handler.getClientInfo() + ":" + msg);
-
         //异步提交转发任务
         forwardingThreadPoolExecutor.execute(() -> {
             synchronized (TCPServer.this) {
@@ -147,8 +146,6 @@ public class TCPServer implements ClientHandler.ClientHandlerCallback{
                             SocketChannel socketChannel = serverSocketChannel.accept();
                             try {
                                 ClientHandler clientHandler = new ClientHandler(socketChannel,TCPServer.this);
-                                // 读取数据并打印
-                                clientHandler.readToPrint();
                                 synchronized (TCPServer.this) {
                                     clientHandlerList.add(clientHandler);
                                 }
