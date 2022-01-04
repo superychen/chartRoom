@@ -2,7 +2,6 @@ package net.cqyc.sample.clink.core;
 
 
 import java.io.Closeable;
-import java.net.Socket;
 import java.nio.channels.SocketChannel;
 
 /**
@@ -34,10 +33,14 @@ public interface IoProvider extends Closeable {
 
         @Override
         public final void run() {
-
+            canProviderOutput(attach);
         }
         public final void setAttach(Object attach) {
             this.attach = attach;
+        }
+
+        public final <T> T getAttach() {
+            return (T) attach;
         }
 
         protected abstract void canProviderOutput(Object attach);

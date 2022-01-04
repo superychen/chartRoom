@@ -2,9 +2,13 @@ package net.cqyc.sample.client.client;
 
 
 import net.cqyc.sample.client.client.bean.ServerInfo;
+import net.cqyc.sample.clink.core.IoContext;
+import net.cqyc.sample.clink.impl.IoSelectorProvider;
 
-import java.io.*;
-import java.net.Socket;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 
 
 /**
@@ -14,7 +18,10 @@ import java.net.Socket;
  */
 public class Client {
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
+        IoContext.setup()
+                .ioProvider(new IoSelectorProvider()).start();
+
         ServerInfo info = ClientSearcher.searchServer(10000);
         System.out.println("Server:" + info);
 
@@ -34,6 +41,8 @@ public class Client {
                 }
             }
         }
+
+        IoContext.close();
     }
 
     public static void write(TCPClient tcpClient) throws IOException {
@@ -45,6 +54,9 @@ public class Client {
             // 键盘读取一行
             String str = input.readLine();
             // 发送到服务器
+            tcpClient.send(str);
+            tcpClient.send(str);
+            tcpClient.send(str);
             tcpClient.send(str);
 
             if ("00bye00".equalsIgnoreCase(str)) {
