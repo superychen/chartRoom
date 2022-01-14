@@ -2,14 +2,14 @@ package net.cqyc.sample.clink.box;
 
 import net.cqyc.sample.clink.core.SendPacket;
 
-import java.io.IOException;
+import java.io.ByteArrayInputStream;
 
 /**
  * @Description:
  * @author: cqyc
  * @date 2021/12/31
  */
-public class StringSendPacket extends SendPacket {
+public class StringSendPacket extends SendPacket<ByteArrayInputStream> {
 
     private final byte[] bytes;
 
@@ -19,12 +19,7 @@ public class StringSendPacket extends SendPacket {
     }
 
     @Override
-    public byte[] bytes() {
-        return bytes;
-    }
-
-    @Override
-    public void close() throws IOException {
-
+    protected ByteArrayInputStream createStream() {
+        return new ByteArrayInputStream(bytes);
     }
 }

@@ -88,9 +88,11 @@ public class IoSelectorProvider implements IoProvider {
                 while (!isClosed.get()) {
                     try {
                         if (writeSelector.select() == 0) {
+                            System.out.println("write selector 是否被阻塞！");
                             waitSelection(inRegOutput);
                             continue;
                         }
+                        System.out.println("write selector，这是写数据！");
                         Set<SelectionKey> selectionKeys = writeSelector.selectedKeys();
                         for (SelectionKey selectionKey : selectionKeys) {
                             if (selectionKey.isValid()) {

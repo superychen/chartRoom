@@ -3,7 +3,9 @@ package net.cqyc.sample.clink.core;
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.SocketChannel;
+import java.nio.channels.WritableByteChannel;
 
 /**
  * @author cqyc
@@ -11,23 +13,27 @@ import java.nio.channels.SocketChannel;
  * @date 2021/12/5
  */
 public class IoArgs {
-    private int limit = 256;
-    private byte[] byteBuffer = new byte[256];
-
-    private ByteBuffer buffer = ByteBuffer.wrap(byteBuffer);
+    private int limit = 5;
+    private ByteBuffer buffer = ByteBuffer.allocate(limit);
 
     /**
      * 从bytes读取数据
-     * @param bytes
-     * @param offset
      * @return
      */
-    public int readFrom(byte[] bytes, int offset) {
-        //拿到当前可以容纳的一个大小
-        int size = Math.min(bytes.length - offset, buffer.remaining());
-        buffer.put(bytes, offset, size);
-        //返回本次操作了多少个size
-        return size;
+    public int readFrom(ReadableByteChannel channel) throws IOException {
+        startWriting();
+
+        int bytesProduced = 0;
+        while (buffer.hasRemaining()) {
+            int len = channel.read(buffer);
+            if(len < 0) {
+                throw new EOFException();
+            }
+            bytesProduced += len;
+        }
+        finishWriting();
+
+        return bytesProduced;
     }
 
     /**
@@ -36,12 +42,16 @@ public class IoArgs {
      * @param offset
      * @return
      */
-    public int writeTo(byte[] bytes, int offset) {
-        //拿到当前可以容纳的一个大小
-        int size = Math.min(bytes.length - offset, buffer.remaining());
-        buffer.get(bytes, offset, size);
-        //返回本次操作了多 少个size
-        return size;
+    public int writeTo(WritableByteChannel channel) throws IOException {
+        int bytesProduced = 0;
+        while (buffer.hasRemaining()) {
+            int len = channel.write(buffer);
+            if(len < 0) {
+                throw new EOFException();
+            }
+            bytesProduced += len;
+        }
+        return bytesProduced ;
     }
 
     /**
@@ -104,7 +114,9 @@ public class IoArgs {
     }
 
     public void writeLength(int total) {
+        startWriting();
         buffer.putInt(total);
+        finishWriting();
     }
 
     public int readLength() {
@@ -120,9 +132,28 @@ public class IoArgs {
 //        return new String(byteBuffer, 0, buffer.position() - 1);
 //    }
 
-    public interface IoArgsEventListener {
-        void onStarted(IoArgs args);
+    /**
+     * IoArgs 提供者、处理者：数据生产和消费者
+     */
+    public interface IoArgsEventProcessor {
+        /**
+         * 提供一份可消费的ioArgs
+         * @return
+         */
+        IoArgs provideIoArgs();
 
-        void onCompleted(IoArgs args);
+        /**
+         * 消费失败时回调
+         * @param args
+         * @param e
+         */
+        void onConsumeFailed(IoArgs args, Exception e);
+
+        /**
+         * 消费成功
+         * @param args
+         */
+        void onConsumeCompleted(IoArgs args);
     }
+
 }
